@@ -1,0 +1,194 @@
+{
+  "timestamp": "2025-12-05T01:41:02.581627",
+  "version": "v1.0",
+  "data": {
+    "domains_active": [
+      "secure-amazon.com",
+      "facebook-login-secure.com",
+      "google-security-check.com",
+      "bank-security-alert.com",
+      "fedex-tracking-confirm.com",
+      "crypto-exchange.top",
+      "wallet-verify.xyz",
+      "dropbox-account.com",
+      "ups-delivery-verify.com",
+      "linkedin-confirm.com",
+      "tax-refund-irs.com",
+      "microsoftaccount-support.com",
+      "appleid-verify.com",
+      "netflix-verify.com",
+      "paypa1.com"
+    ],
+    "links_active": [
+      "https://fedex-tracking-confirm.com/track",
+      "https://crypto-exchange.top/login",
+      "https://linkedin-confirm.com/login",
+      "https://ups-delivery-verify.com/package",
+      "https://appleid-verify.com/signin",
+      "https://secure-amazon.com/account/verify",
+      "https://wallet-verify.xyz/signin",
+      "https://dropbox-account.com/auth",
+      "https://netflix-verify.com/signin",
+      "https://microsoftaccount-support.com/auth",
+      "https://facebook-login-secure.com/account",
+      "https://bank-security-alert.com/update",
+      "https://paypa1.com/login",
+      "https://tax-refund-irs.com/claim",
+      "https://google-security-check.com/verify"
+    ],
+    "ips_active": [
+      "10.0.0.50",
+      "203.0.113.45",
+      "192.168.1.100",
+      "198.51.100.120",
+      "172.16.0.200"
+    ],
+    "domains_new_today": [
+      "apple-security-alert.com",
+      "paypal-urgent-verify.com",
+      "amazon-account-update.com"
+    ],
+    "links_new_today": [
+      "https://amazon-account-update.com/validate",
+      "https://apple-security-alert.com/verify",
+      "https://paypal-urgent-verify.com/confirm"
+    ],
+    "domains_inactive": [
+      "expired-scam-site.net",
+      "old-phishing-domain.com",
+      "takedown-phishing.org"
+    ],
+    "tracked_threats": [
+      {
+        "url": "http://phishing.example.com",
+        "severity": 85,
+        "sources": [
+          "ml_models",
+          "phishing_database"
+        ],
+        "status": "open",
+        "first_seen": "2025-12-05T17:33:49.608674Z"
+      },
+      {
+        "url": "http://threat.com",
+        "severity": 0,
+        "sources": [],
+        "status": "open",
+        "first_seen": "2025-12-05T17:33:49.905885Z"
+      },
+      {
+        "url": "http://test.com",
+        "severity": 60,
+        "sources": [],
+        "status": "open",
+        "first_seen": "2025-12-05T17:33:50.145289Z"
+      },
+      {
+        "url": "http://threat1.com",
+        "severity": 0,
+        "sources": [],
+        "status": "open",
+        "first_seen": "2025-12-05T17:33:50.417683Z"
+      },
+      {
+        "url": "http://threat2.com",
+        "severity": 0,
+        "sources": [],
+        "status": "open",
+        "first_seen": "2025-12-05T17:33:50.612576Z"
+      },
+      {
+        "url": "http://paypa1-login.com",
+        "severity": 72,
+        "sources": [
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2025-12-05T17:35:55.287138Z"
+      },
+      {
+        "url": "http://test.example.com",
+        "severity": 75,
+        "sources": [
+          "test"
+        ],
+        "status": "open",
+        "first_seen": "2025-12-05T18:07:25.669284Z"
+      },
+      {
+        "url": "http://localhost:5000/",
+        "severity": 66,
+        "sources": [
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2025-12-08T16:05:18.445006Z"
+      },
+      {
+        "url": "http://192.168.1.1/admin/shell.exe",
+        "severity": 97,
+        "sources": [
+          "link_threats_detector",
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2025-12-16T04:38:05.368832Z"
+      },
+      {
+        "url": "https://amazon-verify.xyz/account/update",
+        "severity": 98,
+        "sources": [
+          "link_threats_detector",
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2025-12-16T04:45:00.696916Z"
+      },
+      {
+        "url": "http://secure-login-apple.com",
+        "severity": 82,
+        "sources": [
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2025-12-16T05:09:45.328051Z"
+      },
+      {
+        "url": "http://127.0.0.1:5000",
+        "severity": 90,
+        "sources": [
+          "link_threats_detector",
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2025-12-16T22:29:27.500895Z"
+      }
+    ]
+  },
+  "status": {
+    "domains_active": {
+      "count": 15,
+      "status": "SUCCESS"
+    },
+    "links_active": {
+      "count": 15,
+      "status": "SUCCESS"
+    },
+    "ips_active": {
+      "count": 5,
+      "status": "SUCCESS"
+    },
+    "domains_new_today": {
+      "count": 3,
+      "status": "SUCCESS"
+    },
+    "links_new_today": {
+      "count": 3,
+      "status": "SUCCESS"
+    },
+    "domains_inactive": {
+      "count": 3,
+      "status": "SUCCESS"
+    }
+  }
+}

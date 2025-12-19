@@ -1,0 +1,5 @@
+{
+  "name": "PhishGuard AI",
+  "description": "A sophisticated phishing URL detector utilizing Gemini 2.5 Flash to simulate a logistic regression classification model for security analysis.",
+  "requestFramePermissions": []
+}
