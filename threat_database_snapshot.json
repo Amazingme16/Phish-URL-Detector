@@ -162,6 +162,36 @@
         ],
         "status": "open",
         "first_seen": "2025-12-16T22:29:27.500895Z"
+      },
+      {
+        "url": "http://secure-paypal.tk/v",
+        "severity": 99,
+        "sources": [
+          "link_threats_detector",
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2025-12-30T07:07:25.388014Z"
+      },
+      {
+        "url": "http://secure-paypal.tk/v/",
+        "severity": 99,
+        "sources": [
+          "link_threats_detector",
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2026-01-02T09:31:25.135899Z"
+      },
+      {
+        "url": "http://paypa1.com/login",
+        "severity": 100,
+        "sources": [
+          "phishing_database",
+          "link_threats_detector"
+        ],
+        "status": "open",
+        "first_seen": "2026-01-02T17:44:34.630939Z"
       }
     ]
   },

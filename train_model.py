@@ -212,12 +212,13 @@ def generate_training_data(n_samples=1000, seed_data=None):
     
     return np.array(X), np.array(y)
 
-def train_models(use_seed=False, use_threats=False):
+def train_models(use_seed=False, use_threats=False, dataset_path=None):
     """Train and save both Logistic Regression and Random Forest models
     
     Args:
         use_seed (bool): If True, load and use seed URLs from CSV dataset
         use_threats (bool): If True, load threats from JSON and SQLite databases
+        dataset_path (str): Optional path to custom dataset CSV
     """
     
     all_X = []
@@ -226,8 +227,9 @@ def train_models(use_seed=False, use_threats=False):
     # Load seed data if requested
     seed_data = None
     if use_seed:
-        print("Loading seed dataset...")
-        seed_data = load_seed_urls()
+        target_csv = dataset_path if dataset_path else 'data/seed_urls.csv'
+        print(f"Loading dataset from substitute source: {target_csv}...")
+        seed_data = load_seed_urls(target_csv)
         if seed_data[0] is None:
             print("[WARNING] Seed dataset not available")
     
@@ -272,6 +274,18 @@ def train_models(use_seed=False, use_threats=False):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
+
+    # Save training sample for LIME
+    print("\n" + "="*60)
+    print("Saving Training Sample for LIME...")
+    print("="*60)
+    
+    # Ensure models directory exists
+    if not os.path.exists('models'):
+        os.makedirs('models')
+        
+    np.save('models/training_sample.npy', X_train[:500])
+    print(f"[OK] Saved {len(X_train[:500])} training samples to models/training_sample.npy")
     
     print("\n" + "="*60)
     print("Training Logistic Regression Model...")
@@ -416,19 +430,26 @@ if __name__ == "__main__":
     use_threats = '--use-threats' in sys.argv
     use_all = '--all' in sys.argv
     
+    dataset_path = None
+    for arg in sys.argv:
+        if arg.startswith('--dataset='):
+            dataset_path = arg.split('=')[1]
+            use_seed = True # Implicitly enable seed usage if dataset provided
+
     if use_all:
         print("[INFO] Running with ALL data sources (seed + threats)...")
-        train_models(use_seed=True, use_threats=True)
+        train_models(use_seed=True, use_threats=True, dataset_path=dataset_path)
     elif use_threats:
         print("[INFO] Running with threat databases...")
-        train_models(use_seed=use_seed, use_threats=True)
+        train_models(use_seed=use_seed, use_threats=True, dataset_path=dataset_path)
     elif use_seed:
         print("[INFO] Running with seed dataset...")
-        train_models(use_seed=True, use_threats=False)
+        train_models(use_seed=True, use_threats=False, dataset_path=dataset_path)
     else:
         print("[INFO] Running with synthetic data only...")
         print("[TIP] Available flags:")
         print("       --use-seed    : Include seed URLs from data/seed_urls.csv")
+        print("       --dataset=PATH: Specify custom dataset path (implies --use-seed)")
         print("       --use-threats : Include URLs from threat databases")
         print("       --all         : Include ALL data sources")
         train_models(use_seed=False, use_threats=False)

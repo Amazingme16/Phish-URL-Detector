@@ -17,14 +17,18 @@ class URLDatasetLoader:
         self.phishing_urls = []
         self.legitimate_urls = []
         
-    def load_dataset(self) -> bool:
-        """Load CSV dataset"""
+    def load_dataset(self, limit: int = None) -> bool:
+        """Load CSV dataset
+        
+        Args:
+            limit (int): Optional max number of rows to load
+        """
         try:
             if not os.path.exists(self.csv_path):
                 print(f"[ERROR] CSV file not found: {self.csv_path}")
                 return False
             
-            self.data = pd.read_csv(self.csv_path)
+            self.data = pd.read_csv(self.csv_path, nrows=limit)
             print(f"[OK] Loaded dataset: {len(self.data)} URLs")
             
             # Separate URLs by label

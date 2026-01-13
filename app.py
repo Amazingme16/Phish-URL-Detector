@@ -7,7 +7,18 @@ from flask import Flask, render_template, request, jsonify
 import pickle
 import os
 import numpy as np
-import shap
+try:
+    import shap
+except ImportError:
+    shap = None
+    print("SHAP not available")
+
+try:
+    import lime
+    import lime.lime_tabular
+except ImportError:
+    lime = None
+    print("LIME not available")
 from url_features import URLFeatureExtractor
 from url_dataset_loader import URLDatasetLoader
 from advanced_features import AdvancedURLAnalyzer
@@ -30,7 +41,29 @@ try:
         feature_extractor = pickle.load(f)
     
     # Initialize SHAP explainer for tree-based models (use RF as it's faster)
-    shap_explainer = shap.TreeExplainer(rf_model)
+    try:
+        if shap:
+            shap_explainer = shap.TreeExplainer(rf_model)
+        else:
+            shap_explainer = None
+    except Exception as e:
+        print(f"SHAP initialization failed: {e}")
+        shap_explainer = None
+    
+    # Initialize LIME Explainer
+    try:
+        X_train_sample = np.load('models/training_sample.npy')
+        lime_explainer = lime.lime_tabular.LimeTabularExplainer(
+            X_train_sample,
+            feature_names=feature_extractor.get_feature_names(),
+            class_names=['Legitimate', 'Phishing'],
+            mode='classification'
+        )
+        print("[OK] LIME explainer initialized")
+    except Exception as e:
+        print(f"[WARNING] Failed to initialize LIME explainer: {e}")
+        lime_explainer = None
+        
     print("[OK] All models loaded successfully, including XGBoost")
 except FileNotFoundError as e:
     print(f"Models not found! Please run train_model.py first. Error: {e}")
@@ -39,6 +72,7 @@ except FileNotFoundError as e:
     rf_model = None
     xgb_model = None
     shap_explainer = None
+    lime_explainer = None
 
 # Initialize advanced analyzer and link threats detector
 advanced_analyzer = AdvancedURLAnalyzer()
@@ -198,6 +232,49 @@ def analyze_url():
                 results['shap_analysis'] = {
                     'top_reasons': [],
                     'explanation': 'SHAP analysis unavailable'
+                }
+            
+            # LIME Explainability
+            try:
+                if lime_explainer:
+                    # Define prediction function for LIME (returns probas for [Legit, Phishing])
+                    def predict_fn_ensemble(X):
+                        # X is numpy array of features
+                        # We need to predict probas with all 3 models and average
+                        lr_p = lr_model.predict_proba(X)
+                        rf_p = rf_model.predict_proba(X)
+                        xgb_p = xgb_model.predict_proba(X)
+                        return (lr_p + rf_p + xgb_p) / 3
+                    
+                    # Explain instance
+                    # num_features=10 to get top contributors
+                    lime_exp = lime_explainer.explain_instance(
+                        np.array(features), 
+                        predict_fn_ensemble, 
+                        num_features=10
+                    )
+                    
+                    # Extract list of (feature_name, weight)
+                    # as_list() returns [(feature_cond, weight), ...]
+                    # We map this to our feature names cleaner
+                    top_lime = []
+                    for feature_cond, weight in lime_exp.as_list():
+                        # feature_cond might be like "length > 0.5" or just feature name
+                        # We try to clean it up or just use it as is
+                        top_lime.append({
+                            "feature": feature_cond,
+                            "weight": weight,
+                            "direction": "phishing" if weight > 0 else "legitimate"
+                        })
+                        
+                    results['lime_analysis'] = {
+                        "top_contributing_features": top_lime,
+                        "local_prediction": lime_exp.local_pred[0] # Local linear model prediction
+                    }
+            except Exception as e:
+                print(f"LIME analysis error: {str(e)}")
+                results['lime_analysis'] = {
+                    "error": str(e)
                 }
             
             # Feature analysis (warning signs)

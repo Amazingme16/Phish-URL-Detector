@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 
 <body>
@@ -21,10 +22,30 @@
                 <span class="logo-text">PhishGuard <span class="highlight">AI</span></span>
             </div>
             <div class="header-actions">
+                <button id="theme-toggle" class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle dark/light mode">
+                    <i class="fas fa-moon" id="theme-icon"></i>
+                </button>
+                <button id="history-toggle" class="history-toggle-btn" onclick="toggleHistory()" title="Scan History">
+                    <i class="fas fa-history"></i>
+                    <span id="history-count" class="history-count">0</span>
+                </button>
                 <span class="powered-by">Powered by Advanced ML</span>
             </div>
         </div>
     </header>
+
+    <!-- Scan History Sidebar -->
+    <aside id="history-sidebar" class="history-sidebar hidden">
+        <div class="history-header">
+            <h3><i class="fas fa-history"></i> Scan History</h3>
+            <button onclick="clearHistory()" class="clear-btn" title="Clear all history">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+        <div id="history-list" class="history-list">
+            <p class="history-empty">No scans yet</p>
+        </div>
+    </aside>
 
     <main class="main-content container">
         <!-- Hero Section -->
@@ -46,7 +67,7 @@
                         <input type="text" id="url-input"
                             placeholder="Enter URL to analyze (e.g., http://suspicious-bank-login.com)"
                             autocomplete="off">
-                        <button id="analyze-btn" onclick="analyzeURL()">
+                        <button id="analyze-btn">
                             <span class="btn-text">Analyze</span>
                             <span class="btn-loader hidden"></span>
                         </button>
@@ -109,19 +130,42 @@
                                 <span class="model-name">Random Forest</span>
                                 <span id="rf-mini-val" class="model-val">---</span>
                             </div>
+                            <div class="model-item">
+                                <span class="model-name">XGBoost</span>
+                                <span id="xgb-mini-val" class="model-val">---</span>
+                            </div>
+                            <div class="model-item ensemble-item">
+                                <span class="model-name">Ensemble</span>
+                                <span id="ensemble-mini-val" class="model-val">---</span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
             </div>
 
-            <!-- Full-Width Feature Chart -->
-            <div class="glass-card chart-card">
-                <h3><span class="icon"><i class="fas fa-chart-bar"></i></span>Feature Analysis (Contribution
-                    Weights)</h3>
-                <div id="feature-chart-container" class="chart-wrapper">
-                    <!-- Dynamic chart content injected by JS -->
-                    <div class="placeholder-chart">Analyzing feature weights...</div>
+            <!-- Charts Grid: Model Confidences & Risk Breakdown -->
+            <div class="charts-grid">
+                <div class="glass-card chart-card">
+                    <h3><span class="icon"><i class="fas fa-chart-bar"></i></span>Model Confidences</h3>
+                    <div class="chart-container">
+                        <canvas id="model-chart"></canvas>
+                    </div>
+                </div>
+                <div class="glass-card chart-card">
+                    <h3><span class="icon"><i class="fas fa-chart-pie"></i></span>Risk Factor Breakdown</h3>
+                    <div class="chart-container">
+                        <canvas id="risk-pie-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SHAP Explainability Card -->
+            <div class="glass-card shap-card">
+                <h3><span class="icon"><i class="fas fa-brain"></i></span>Why This Decision? (AI Explainability)</h3>
+                <p class="shap-subtitle">Top features influencing this prediction</p>
+                <div id="shap-container" class="shap-container">
+                    <div class="placeholder-chart">SHAP analysis will appear here...</div>
                 </div>
             </div>
 
@@ -175,7 +219,55 @@
                 </div>
             </div>
 
+            <!-- Batch Analysis Section -->
+            <div id="batch-section" class="batch-section hidden">
+                <div class="glass-card batch-card">
+                    <h3><span class="icon"><i class="fas fa-layer-group"></i></span>Batch URL Analysis</h3>
+                    <p class="batch-subtitle">Analyze multiple URLs at once (one per line)</p>
+                    <textarea id="batch-input" placeholder="Enter URLs, one per line:
+https://example1.com
+https://example2.com
+https://example3.com" rows="6"></textarea>
+                    <div class="batch-actions">
+                        <button onclick="analyzeBatch()" class="batch-btn">
+                            <i class="fas fa-play"></i> Analyze Batch
+                        </button>
+                        <button onclick="exportBatchResults()" class="batch-btn export-btn" id="export-batch-btn" disabled>
+                            <i class="fas fa-download"></i> Export CSV
+                        </button>
+                    </div>
+                    <div id="batch-results" class="batch-results hidden">
+                        <h4>Batch Results</h4>
+                        <div class="batch-table-wrapper">
+                            <table id="batch-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>URL</th>
+                                        <th>Verdict</th>
+                                        <th>Risk</th>
+                                        <th>Ensemble</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="batch-table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </section>
+
+        <!-- Navigation Pills for Batch/Single Analysis -->
+        <div class="analysis-mode-pills">
+            <button class="pill-btn active" onclick="switchMode('single')" id="single-pill">
+                <i class="fas fa-search"></i> Single URL
+            </button>
+            <button class="pill-btn" onclick="switchMode('batch')" id="batch-pill">
+                <i class="fas fa-layer-group"></i> Batch Analysis
+            </button>
+        </div>
     </main>
 
     <footer class="glass-footer">
