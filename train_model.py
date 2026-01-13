@@ -12,6 +12,7 @@ import sqlite3
 import os
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from url_features import URLFeatureExtractor
@@ -308,6 +309,57 @@ def train_models(use_seed=False, use_threats=False):
     print(f"Recall:    {rf_recall:.4f}")
     print(f"F1-Score:  {rf_f1:.4f}")
     
+    # XGBoost Model
+    print("\n" + "="*60)
+    print("Training XGBoost Model...")
+    print("="*60)
+    
+    xgb_model = XGBClassifier(
+        n_estimators=200,
+        max_depth=6,
+        learning_rate=0.1,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=42,
+        eval_metric='logloss'
+    )
+    xgb_model.fit(X_train, y_train)
+    
+    xgb_pred = xgb_model.predict(X_test)
+    xgb_accuracy = accuracy_score(y_test, xgb_pred)
+    xgb_precision = precision_score(y_test, xgb_pred)
+    xgb_recall = recall_score(y_test, xgb_pred)
+    xgb_f1 = f1_score(y_test, xgb_pred)
+    
+    print(f"Accuracy:  {xgb_accuracy:.4f}")
+    print(f"Precision: {xgb_precision:.4f}")
+    print(f"Recall:    {xgb_recall:.4f}")
+    print(f"F1-Score:  {xgb_f1:.4f}")
+    
+    # Ensemble Performance
+    print("\n" + "="*60)
+    print("Ensemble Performance (Average of LR, RF, XGB):")
+    print("="*60)
+    
+    # Get probabilities from all models
+    lr_proba = lr_model.predict_proba(X_test)[:, 1]
+    rf_proba = rf_model.predict_proba(X_test)[:, 1]
+    xgb_proba = xgb_model.predict_proba(X_test)[:, 1]
+    
+    # Average ensemble
+    ensemble_proba = (lr_proba + rf_proba + xgb_proba) / 3
+    ensemble_pred = (ensemble_proba >= 0.5).astype(int)
+    
+    ensemble_accuracy = accuracy_score(y_test, ensemble_pred)
+    ensemble_precision = precision_score(y_test, ensemble_pred)
+    ensemble_recall = recall_score(y_test, ensemble_pred)
+    ensemble_f1 = f1_score(y_test, ensemble_pred)
+    
+    print(f"Accuracy:  {ensemble_accuracy:.4f}")
+    print(f"Precision: {ensemble_precision:.4f}")
+    print(f"Recall:    {ensemble_recall:.4f}")
+    print(f"F1-Score:  {ensemble_f1:.4f}")
+    
     # Feature importance for Random Forest
     print("\n" + "="*60)
     print("Top 5 Most Important Features (Random Forest):")
@@ -319,6 +371,17 @@ def train_models(use_seed=False, use_threats=False):
     
     for idx in importance_indices:
         importance = rf_model.feature_importances_[idx]
+        print(f"{feature_names[idx]:30s}: {importance:.4f}")
+    
+    # Feature importance for XGBoost
+    print("\n" + "="*60)
+    print("Top 5 Most Important Features (XGBoost):")
+    print("="*60)
+    
+    xgb_importance_indices = np.argsort(xgb_model.feature_importances_)[::-1][:5]
+    
+    for idx in xgb_importance_indices:
+        importance = xgb_model.feature_importances_[idx]
         print(f"{feature_names[idx]:30s}: {importance:.4f}")
     
     # Save models
@@ -333,6 +396,10 @@ def train_models(use_seed=False, use_threats=False):
     with open('models/rf_model.pkl', 'wb') as f:
         pickle.dump(rf_model, f)
     print("[OK] Random Forest model saved to models/rf_model.pkl")
+    
+    with open('models/xgb_model.pkl', 'wb') as f:
+        pickle.dump(xgb_model, f)
+    print("[OK] XGBoost model saved to models/xgb_model.pkl")
     
     # Save feature extractor
     with open('models/feature_extractor.pkl', 'wb') as f:

@@ -6,6 +6,8 @@ Provides web interface and API endpoints
 from flask import Flask, render_template, request, jsonify
 import pickle
 import os
+import numpy as np
+import shap
 from url_features import URLFeatureExtractor
 from url_dataset_loader import URLDatasetLoader
 from advanced_features import AdvancedURLAnalyzer
@@ -22,13 +24,21 @@ try:
         lr_model = pickle.load(f)
     with open('models/rf_model.pkl', 'rb') as f:
         rf_model = pickle.load(f)
+    with open('models/xgb_model.pkl', 'rb') as f:
+        xgb_model = pickle.load(f)
     with open('models/feature_extractor.pkl', 'rb') as f:
         feature_extractor = pickle.load(f)
-except FileNotFoundError:
-    print("Models not found! Please run train_model.py first.")
+    
+    # Initialize SHAP explainer for tree-based models (use RF as it's faster)
+    shap_explainer = shap.TreeExplainer(rf_model)
+    print("[OK] All models loaded successfully, including XGBoost")
+except FileNotFoundError as e:
+    print(f"Models not found! Please run train_model.py first. Error: {e}")
     feature_extractor = URLFeatureExtractor()
     lr_model = None
     rf_model = None
+    xgb_model = None
+    shap_explainer = None
 
 # Initialize advanced analyzer and link threats detector
 advanced_analyzer = AdvancedURLAnalyzer()
@@ -97,7 +107,7 @@ def analyze_url():
             'status': 'success'
         }
         
-        if lr_model and rf_model:
+        if lr_model and rf_model and xgb_model:
             # Logistic Regression prediction
             lr_pred = lr_model.predict([features])[0]
             lr_prob = lr_model.predict_proba([features])[0][1]
@@ -106,8 +116,12 @@ def analyze_url():
             rf_pred = rf_model.predict([features])[0]
             rf_prob = rf_model.predict_proba([features])[0][1]
             
-            # Average probability
-            avg_prob = (lr_prob + rf_prob) / 2
+            # XGBoost prediction
+            xgb_pred = xgb_model.predict([features])[0]
+            xgb_prob = xgb_model.predict_proba([features])[0][1]
+            
+            # Ensemble: Average probability from all three models
+            ensemble_prob = (lr_prob + rf_prob + xgb_prob) / 3
             
             results['models'] = {
                 'logistic_regression': {
@@ -119,18 +133,74 @@ def analyze_url():
                     'prediction': 'PHISHING' if rf_pred == 1 else 'LEGITIMATE',
                     'probability': float(rf_prob),
                     'confidence': f"{rf_prob*100:.1f}%"
+                },
+                'xgboost': {
+                    'prediction': 'PHISHING' if xgb_pred == 1 else 'LEGITIMATE',
+                    'probability': float(xgb_prob),
+                    'confidence': f"{xgb_prob*100:.1f}%"
                 }
             }
             
-            results['overall'] = {
-                'prediction': 'PHISHING' if avg_prob >= 0.5 else 'LEGITIMATE',
-                'probability': float(avg_prob),
-                'confidence': f"{avg_prob*100:.1f}%",
-                'risk_level': get_risk_level(avg_prob),
-                'risk_color': get_risk_color(avg_prob)
+            results['ensemble'] = {
+                'prediction': 'PHISHING' if ensemble_prob >= 0.5 else 'LEGITIMATE',
+                'probability': float(ensemble_prob),
+                'confidence': f"{ensemble_prob*100:.1f}%"
             }
             
-            # Feature analysis
+            # Keep 'overall' for backward compatibility, but use ensemble
+            results['overall'] = {
+                'prediction': 'PHISHING' if ensemble_prob >= 0.5 else 'LEGITIMATE',
+                'probability': float(ensemble_prob),
+                'confidence': f"{ensemble_prob*100:.1f}%",
+                'risk_level': get_risk_level(ensemble_prob),
+                'risk_color': get_risk_color(ensemble_prob)
+            }
+            
+            # SHAP Explainability: Calculate feature importance
+            try:
+                if shap_explainer:
+                    # Calculate SHAP values
+                    shap_values = shap_explainer.shap_values(np.array([features]))
+                    
+                    # For binary classification, shap_values might be a list [class_0, class_1]
+                    # We want class_1 (phishing) values
+                    if isinstance(shap_values, list):
+                        shap_values_phishing = shap_values[1][0]
+                    else:
+                        shap_values_phishing = shap_values[0]
+                    
+                    feature_names = feature_extractor.get_feature_names()
+                    
+                    # Create list of (feature_name, shap_value, feature_value) tuples
+                    feature_impacts = []
+                    for i, (fname, sval, fval) in enumerate(zip(feature_names, shap_values_phishing, features)):
+                        # Only include features that are active (value = 1) or have significant SHAP impact
+                        if abs(sval) > 0.01:  # Threshold to filter noise
+                            feature_impacts.append({
+                                'feature': fname,
+                                'impact': float(sval),
+                                'direction': 'phishing' if sval > 0 else 'legitimate',
+                                'feature_value': int(fval)
+                            })
+                    
+                    # Sort by absolute impact
+                    feature_impacts.sort(key=lambda x: abs(x['impact']), reverse=True)
+                    
+                    # Get top 5 reasons
+                    top_reasons = feature_impacts[:5]
+                    
+                    results['shap_analysis'] = {
+                        'top_reasons': top_reasons,
+                        'explanation': f"Top {len(top_reasons)} features contributing to this prediction"
+                    }
+            except Exception as e:
+                print(f"SHAP analysis error: {str(e)}")
+                results['shap_analysis'] = {
+                    'top_reasons': [],
+                    'explanation': 'SHAP analysis unavailable'
+                }
+            
+            # Feature analysis (warning signs)
             feature_names = feature_extractor.get_feature_names()
             warning_signs = []
             for i, (feature_name, feature_value) in enumerate(zip(feature_names, features)):
@@ -212,10 +282,11 @@ def analyze_url():
 def model_info():
     """Get information about the models"""
     return jsonify({
-        'models_loaded': lr_model is not None and rf_model is not None,
-        'features_count': 15,
+        'models_loaded': lr_model is not None and rf_model is not None and xgb_model is not None,
+        'features_count': 19,
         'feature_names': feature_extractor.get_feature_names(),
-        'algorithms': ['Logistic Regression', 'Random Forest']
+        'algorithms': ['Logistic Regression', 'Random Forest', 'XGBoost'],
+        'ensemble_enabled': True
     })
 
 @app.route('/api/seed-dataset', methods=['GET'])
@@ -290,7 +361,7 @@ def health():
     """Health check endpoint with threat database and seed dataset status"""
     health_status = {
         'status': 'healthy',
-        'models_ready': lr_model is not None and rf_model is not None,
+        'models_ready': lr_model is not None and rf_model is not None and xgb_model is not None,
         'seed_dataset_loaded': seed_dataset_loaded,
         'threat_database': {
             'snapshot_available': bool(threat_intel.snapshot_data),
