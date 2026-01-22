@@ -55,35 +55,72 @@ def get_phishtank_data(limit=10000):
         return None
 
 def get_legitimate_data(limit=10000):
-    # Using Tranco list for top domains
-    url = "https://tranco-list.eu/top-1m.csv.zip"
+    # Setup sources: Primary (Tranco), Secondary (Majestic/Other)
+    sources = [
+        {
+            "name": "Tranco",
+            "url": "https://tranco-list.eu/top-1m.csv.zip",
+            "type": "zip",
+            "filename_in_zip": "top-1m.csv" 
+        },
+        {
+            "name": "Majestic Million (Fallback)",
+            "url": "https://downloads.majestic.com/majestic_million.csv",
+            "type": "csv"
+        }
+    ]
     
-    print("Fetching Tranco legitimate domains...")
-    try:
-        response = requests.get(url, stream=True, timeout=15)
-        response.raise_for_status()
-        
-        with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-            # Usually contains top-1m.csv
-            csv_filename = z.namelist()[0]
-            with z.open(csv_filename) as f:
-                # Tranco CSV is usually: rank, domain
-                df = pd.read_csv(f, header=None, names=['rank', 'domain'])
+    for source in sources:
+        print(f"Attempting to fetch legitimate domains from {source['name']}...")
+        try:
+            headers = {'User-Agent': 'PhishingURLDetector/1.0'}
+            response = requests.get(source['url'], headers=headers, stream=True, timeout=30)
+            response.raise_for_status()
+            
+            df = None
+            if source['type'] == 'zip':
+                with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+                    # Find the CSV in the zip
+                    target_file = source.get('filename_in_zip')
+                    if not target_file:
+                        target_file = z.namelist()[0]
+                        
+                    with z.open(target_file) as f:
+                        df = pd.read_csv(f, header=None)
+            else:
+                # Direct CSV
+                df = pd.read_csv(io.StringIO(response.content.decode('utf-8')))
+            
+            # Standardization: We expect a 'domain' column or the domain to be the 2nd column
+            print(f"Loaded raw data with shape: {df.shape}")
+            
+            # Tranco/Majestic usually: Rank, Domain
+            # Let's inspect columns to find the domain column
+            domain_col = None
+            if len(df.columns) >= 2:
+                 # Assume 2nd column is domain if unnamed
+                 domain_col = df.columns[1]
+            elif 'Domain' in df.columns:
+                 domain_col = 'Domain'
+            elif 'domain' in df.columns:
+                 domain_col = 'domain'
+            else:
+                # Fallback to 1st column if only 1 exists
+                domain_col = df.columns[0]
                 
-        print(f"Loaded {len(df)} legitimate domains from Tranco.")
-        
-        # Add http/https to make them look like full URLs for consistency?
-        # Many top sites are https. Let's mix or just assume https for now.
-        # Actually proper datasets usually have full URLs. 
-        # But this is a good approximation for benign base domains.
-        
-        domains = df['domain'].sample(n=min(len(df), limit), random_state=42)
-        urls = ["https://www." + d for d in domains]
-        return urls
-        
-    except Exception as e:
-        print(f"Error getting legitimate data: {e}")
-        return None
+            print(f"Using column '{domain_col}' for domains.")
+            
+            domains = df[domain_col].astype(str).sample(n=min(len(df), limit), random_state=42)
+            urls = ["https://www." + d for d in domains]
+            print(f"Successfully loaded {len(urls)} legitimate URLs from {source['name']}.")
+            return urls
+            
+        except Exception as e:
+            print(f"Failed to load from {source['name']}: {e}")
+            continue
+            
+    print("All legitimate data sources failed.")
+    return None
 
 def main():
     if not os.path.exists('data'):

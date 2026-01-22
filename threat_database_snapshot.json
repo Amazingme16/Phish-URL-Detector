@@ -192,6 +192,33 @@
         ],
         "status": "open",
         "first_seen": "2026-01-02T17:44:34.630939Z"
+      },
+      {
+        "url": "https://vvrl.cc/bk97ju",
+        "severity": 74,
+        "sources": [
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2026-01-14T06:33:59.677706Z"
+      },
+      {
+        "url": "https://pub-0fbf25...  https://vvrl.cc/bk97ju https://www.bpjstoto169.site",
+        "severity": 94,
+        "sources": [
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2026-01-14T06:42:53.381405Z"
+      },
+      {
+        "url": "https://www.bpjstoto169.site https://pub-0fbf25...",
+        "severity": 59,
+        "sources": [
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2026-01-14T06:45:56.904857Z"
       }
     ]
   },

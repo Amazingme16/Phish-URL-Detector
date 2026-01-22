@@ -212,12 +212,100 @@ def generate_training_data(n_samples=1000, seed_data=None):
     
     return np.array(X), np.array(y)
 
-def train_models(use_seed=False, use_threats=False, dataset_path=None):
+import pandas as pd
+
+def load_kaggle_dataset(csv_path='data/kaggle_dataset/Phishing_Legitimate_full.csv'):
+    """
+    Load and map Kaggle dataset features to our model's feature space.
+    Source: https://www.kaggle.com/datasets/shashwatwork/phishing-dataset-for-machine-learning
+    """
+    if not os.path.exists(csv_path):
+        # Fallback to recursively finding the file in data/
+        found = False
+        for root, dirs, files in os.walk('data'):
+            if 'Phishing_Legitimate_full.csv' in files:
+                csv_path = os.path.join(root, 'Phishing_Legitimate_full.csv')
+                found = True
+                break
+        if not found:
+            print(f"[WARNING] Kaggle dataset not found at {csv_path}")
+            return None, None
+            
+    try:
+        print(f"Loading Kaggle dataset from {csv_path}...")
+        df = pd.read_csv(csv_path)
+        
+        # Initialize feature matrix with zeros (19 features)
+        # We will map available features and leave others as 0
+        n_samples = len(df)
+        X = np.zeros((n_samples, 19))
+        
+        # Map features
+        # 1. Has IP Address (IpAddress: 1 if IP used)
+        X[:, 0] = df['IpAddress']
+        
+        # 2. Has @ Symbol (AtSymbol: 1 if present)
+        X[:, 1] = df['AtSymbol']
+        
+        # 3. HTTPS Protocol (NoHttps: 1 if no https) -> Our feature: 0 if https (good), 1 if not (bad)
+        # Dataset likely uses 1 for 'No Https' (bad). Ours returns 1 for 'No Https' (bad). Match.
+        X[:, 2] = df['NoHttps']
+        
+        # 4. URL Length (UrlLength). Ours: >75 is suspicious(1)
+        X[:, 3] = (df['UrlLength'] > 75).astype(int)
+        
+        # 5. Number of Subdomains (SubdomainLevel). Ours: >2 is suspicious(1)
+        X[:, 4] = (df['SubdomainLevel'] > 2).astype(int)
+        
+        # 6. Has Hyphen in Domain (NumDashInHostname). Ours: >0 is suspicious(1)
+        X[:, 5] = (df['NumDashInHostname'] > 0).astype(int)
+        
+        # 7. Suspicious Keywords (NumSensitiveWords). Ours: >0 is suspicious(1)
+        X[:, 6] = (df['NumSensitiveWords'] > 0).astype(int)
+        
+        # 8. URL Shortener (Not explicitly in dataset, maybe 'TinyURL'? No col. Leave 0)
+        
+        # 9. Port in URL (Not explicit. Leave 0)
+        
+        # 10. Excess of Numbers (NumNumericChars). Ours: > 30% of length
+        # We approximate using NumNumericChars / UrlLength
+        # Avoid division by zero
+        ratio = df['NumNumericChars'] / df['UrlLength'].replace(0, 1)
+        X[:, 9] = (ratio > 0.3).astype(int)
+        
+        # 11. Domain Length (HostnameLength). Ours: >30 is suspicious(1)
+        X[:, 10] = (df['HostnameLength'] > 30).astype(int)
+        
+        # 12. Multiple Dots (NumDots). Ours: >4 is suspicious(1)
+        X[:, 11] = (df['NumDots'] > 4).astype(int)
+        
+        # 13. File Extension (Not explicit. Leave 0)
+        
+        # 14. Suspicious TLD (Not explicit. Leave 0)
+        
+        # 15. Double Slash Redirect (DoubleSlashInPath). Ours: 1 if present
+        X[:, 14] = df['DoubleSlashInPath']
+        
+        # 16-19. Entropy/Homograph/FreeEmail (Not explicit. Leave 0)
+        
+        # Labels: Kaggle dataset uses 1 for Phishing, 0 for Legitimate (CLASS_LABEL)
+        y = df['CLASS_LABEL'].values
+        
+        print(f"[OK] Loaded and mapped {len(X)} samples from Kaggle dataset")
+        return X, y
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to load Kaggle dataset: {e}")
+        return None, None
+
+
+def train_models(use_seed=False, use_threats=False, use_kaggle=False, dataset_path=None):
     """Train and save both Logistic Regression and Random Forest models
     
     Args:
         use_seed (bool): If True, load and use seed URLs from CSV dataset
         use_threats (bool): If True, load threats from JSON and SQLite databases
+        use_kaggle (bool): If True, load Kaggle phishing dataset
         dataset_path (str): Optional path to custom dataset CSV
     """
     
@@ -233,40 +321,62 @@ def train_models(use_seed=False, use_threats=False, dataset_path=None):
         if seed_data[0] is None:
             print("[WARNING] Seed dataset not available")
     
-    # Load threat database data if requested
+    # Load separate collections into list
+    collected_X = []
+    collected_y = []
+    
+    # 1. Seed Data
+    if seed_data and seed_data[0] is not None:
+         collected_X.append(seed_data[0])
+         collected_y.append(seed_data[1])
+         
+    # 2. Threat Data
     if use_threats:
         print("\nLoading threat databases...")
-        
         # Load from JSON snapshot
         json_data = load_threat_database_json()
         if json_data[0] is not None:
-            all_X.extend(json_data[0].tolist())
-            all_y.extend(json_data[1].tolist())
+             collected_X.append(json_data[0])
+             collected_y.append(json_data[1])
         
         # Load from SQLite database
         db_data = load_threat_tracking_db()
         if db_data[0] is not None:
-            all_X.extend(db_data[0].tolist())
-            all_y.extend(db_data[1].tolist())
-        
-        if all_X:
-            print(f"[OK] Total {len(all_X)} URLs loaded from threat databases")
+             collected_X.append(db_data[0])
+             collected_y.append(db_data[1])
     
-    # Combine threat data with seed data if available
-    combined_seed = None
-    if all_X:
-        combined_seed = (np.array(all_X), np.array(all_y))
-        if seed_data is not None and seed_data[0] is not None:
-            combined_X = np.vstack([seed_data[0], combined_seed[0]])
-            combined_y = np.concatenate([seed_data[1], combined_seed[1]])
-            combined_seed = (combined_X, combined_y)
-    elif seed_data is not None and seed_data[0] is not None:
-        combined_seed = seed_data
+    # 3. Kaggle Data
+    if use_kaggle:
+        kaggle_X, kaggle_y = load_kaggle_dataset()
+        if kaggle_X is not None:
+            collected_X.append(kaggle_X)
+            collected_y.append(kaggle_y)
     
-    print("\nGenerating training data...")
-    X, y = generate_training_data(1000, seed_data=combined_seed)
+    # Combine real data
+    real_data_X = None
+    real_data_y = None
     
-    print(f"Dataset size: {X.shape[0]} samples")
+    if collected_X:
+        real_data_X = np.vstack(collected_X)
+        real_data_y = np.concatenate(collected_y)
+        print(f"\n[OK] Total real data samples: {len(real_data_X)}")
+    
+    # Generate synthetic data (if needed or to augment)
+    # If we have massive real data (like Kaggle's 10k), we might not need synthetic
+    # But let's keep it for robustness if real data is small
+    
+    n_synthetic = 1000
+    if real_data_X is not None and len(real_data_X) > 5000:
+        print("Large real dataset detected. Skipping synthetic data generation.")
+        X = real_data_X
+        y = real_data_y
+    else:
+        print("\nGenerating synthetic training data...")
+        # Pass collected real data as seed to generator
+        combined_seed = (real_data_X, real_data_y) if real_data_X is not None else None
+        X, y = generate_training_data(n_synthetic, seed_data=combined_seed)
+    
+    print(f"Final Dataset size: {X.shape[0]} samples")
     print(f"Features: {X.shape[1]}")
     print(f"Legitimate URLs: {np.sum(y == 0)}, Phishing URLs: {np.sum(y == 1)}")
     
@@ -428,6 +538,7 @@ if __name__ == "__main__":
     # Check for command line flags
     use_seed = '--use-seed' in sys.argv
     use_threats = '--use-threats' in sys.argv
+    use_kaggle = '--kaggle' in sys.argv or '--use-kaggle' in sys.argv
     use_all = '--all' in sys.argv
     
     dataset_path = None
@@ -437,19 +548,23 @@ if __name__ == "__main__":
             use_seed = True # Implicitly enable seed usage if dataset provided
 
     if use_all:
-        print("[INFO] Running with ALL data sources (seed + threats)...")
-        train_models(use_seed=True, use_threats=True, dataset_path=dataset_path)
+        print("[INFO] Running with ALL data sources (seed + threats + kaggle)...")
+        train_models(use_seed=True, use_threats=True, use_kaggle=True, dataset_path=dataset_path)
+    elif use_kaggle:
+        print("[INFO] Running with Kaggle dataset...")
+        train_models(use_seed=use_seed, use_threats=use_threats, use_kaggle=True, dataset_path=dataset_path)
     elif use_threats:
         print("[INFO] Running with threat databases...")
-        train_models(use_seed=use_seed, use_threats=True, dataset_path=dataset_path)
+        train_models(use_seed=use_seed, use_threats=True, use_kaggle=False, dataset_path=dataset_path)
     elif use_seed:
         print("[INFO] Running with seed dataset...")
-        train_models(use_seed=True, use_threats=False, dataset_path=dataset_path)
+        train_models(use_seed=True, use_threats=False, use_kaggle=False, dataset_path=dataset_path)
     else:
         print("[INFO] Running with synthetic data only...")
         print("[TIP] Available flags:")
         print("       --use-seed    : Include seed URLs from data/seed_urls.csv")
         print("       --dataset=PATH: Specify custom dataset path (implies --use-seed)")
         print("       --use-threats : Include URLs from threat databases")
+        print("       --kaggle      : Include Kaggle dataset (Phishing_Legitimate_full.csv)")
         print("       --all         : Include ALL data sources")
-        train_models(use_seed=False, use_threats=False)
+        train_models(use_seed=False, use_threats=False, use_kaggle=False)
