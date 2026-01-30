@@ -219,6 +219,15 @@
         ],
         "status": "open",
         "first_seen": "2026-01-14T06:45:56.904857Z"
+      },
+      {
+        "url": "https://https//:goog1e.com",
+        "severity": 59,
+        "sources": [
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2026-01-25T17:17:25.992479Z"
       }
     ]
   },
