@@ -16,7 +16,67 @@ from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from url_features import URLFeatureExtractor
+from url_features import URLFeatureExtractor
 from url_dataset_loader import URLDatasetLoader
+import pandas as pd
+
+
+def load_phishtank_csv(csv_path='data/verified_online.csv'):
+    """Load and process PhishTank dataset"""
+    if not os.path.exists(csv_path):
+        print(f"[WARNING] PhishTank dataset not found: {csv_path}")
+        return None, None
+    
+    try:
+        print(f"Loading PhishTank dataset from {csv_path}...")
+        df = pd.read_csv(csv_path)
+        
+        # PhishTank CSV columns: phish_id,url,phish_detail_url,submission_time,verified,verification_time,online,target
+        # We only need 'url' and we know they are all verified phishing (or at least flagged)
+        # The file explicitly says "verified_online.csv", so we assume they are active threats
+        
+        # Limit to reasonable size for training speed if needed, but let's try full load
+        # For this exercise, let's take a sample if it's too huge, or filtered by 'online' status if column exists
+        
+        if 'online' in df.columns:
+             df = df[df['online'] == 'yes']
+             
+        urls = df['url'].values
+        y = np.ones(len(urls)) # All are phishing (1)
+        
+        extractor = URLFeatureExtractor()
+        X = []
+        
+        print(f"Extracting features from {len(urls)} PhishTank URLs...")
+        # To avoid extremely long processing times on large datasets, maybe limit?
+        # Let's limit to 2000 for now to keep it responsive, or let user decide.
+        # Given the instruction "add this to the project", I'll try to use a good chunk.
+        # Let's use up to 1000 for now to align with synthetic generation size, 
+         # but actually real data is better. Let's try 1000.
+        
+        count = 0
+        valid_urls = []
+        for url in urls:
+            try:
+                features = extractor.extract_features(url)
+                X.append(features)
+                valid_urls.append(url)
+                count += 1
+                if count >= 1000: # Limit for performance demo
+                    break
+            except Exception as e:
+                # print(f"[WARNING] Processing error {url}: {e}")
+                pass
+                
+        if X:
+            print(f"[OK] Extracted features from {len(X)} PhishTank URLs")
+            return np.array(X), np.ones(len(X))
+            
+    except Exception as e:
+        print(f"[ERROR] Failed to load PhishTank dataset: {str(e)}")
+        
+    return None, None
+
 
 
 def load_threat_database_json(json_path='threat_database_snapshot.json'):
@@ -299,7 +359,8 @@ def load_kaggle_dataset(csv_path='data/kaggle_dataset/Phishing_Legitimate_full.c
         return None, None
 
 
-def train_models(use_seed=False, use_threats=False, use_kaggle=False, dataset_path=None):
+
+def train_models(use_seed=False, use_threats=False, use_kaggle=False, use_phishtank=False, dataset_path=None):
     """Train and save both Logistic Regression and Random Forest models
     
     Args:
@@ -351,6 +412,14 @@ def train_models(use_seed=False, use_threats=False, use_kaggle=False, dataset_pa
         if kaggle_X is not None:
             collected_X.append(kaggle_X)
             collected_y.append(kaggle_y)
+
+    # 4. PhishTank Data
+    if use_phishtank:
+        pt_X, pt_y = load_phishtank_csv()
+        if pt_X is not None:
+             collected_X.append(pt_X)
+             collected_y.append(pt_y)
+
     
     # Combine real data
     real_data_X = None
@@ -539,6 +608,7 @@ if __name__ == "__main__":
     use_seed = '--use-seed' in sys.argv
     use_threats = '--use-threats' in sys.argv
     use_kaggle = '--kaggle' in sys.argv or '--use-kaggle' in sys.argv
+    use_phishtank = '--use-phishtank' in sys.argv
     use_all = '--all' in sys.argv
     
     dataset_path = None
@@ -548,23 +618,27 @@ if __name__ == "__main__":
             use_seed = True # Implicitly enable seed usage if dataset provided
 
     if use_all:
-        print("[INFO] Running with ALL data sources (seed + threats + kaggle)...")
-        train_models(use_seed=True, use_threats=True, use_kaggle=True, dataset_path=dataset_path)
+        print("[INFO] Running with ALL data sources (seed + threats + kaggle + phishtank)...")
+        train_models(use_seed=True, use_threats=True, use_kaggle=True, use_phishtank=True, dataset_path=dataset_path)
     elif use_kaggle:
         print("[INFO] Running with Kaggle dataset...")
-        train_models(use_seed=use_seed, use_threats=use_threats, use_kaggle=True, dataset_path=dataset_path)
+        train_models(use_seed=use_seed, use_threats=use_threats, use_kaggle=True, use_phishtank=use_phishtank, dataset_path=dataset_path)
+    elif use_phishtank:
+        print("[INFO] Running with PhishTank dataset...")
+        train_models(use_seed=use_seed, use_threats=use_threats, use_kaggle=False, use_phishtank=True, dataset_path=dataset_path)
     elif use_threats:
         print("[INFO] Running with threat databases...")
-        train_models(use_seed=use_seed, use_threats=True, use_kaggle=False, dataset_path=dataset_path)
+        train_models(use_seed=use_seed, use_threats=True, use_kaggle=False, use_phishtank=False, dataset_path=dataset_path)
     elif use_seed:
         print("[INFO] Running with seed dataset...")
-        train_models(use_seed=True, use_threats=False, use_kaggle=False, dataset_path=dataset_path)
+        train_models(use_seed=True, use_threats=False, use_kaggle=False, use_phishtank=False, dataset_path=dataset_path)
     else:
         print("[INFO] Running with synthetic data only...")
         print("[TIP] Available flags:")
-        print("       --use-seed    : Include seed URLs from data/seed_urls.csv")
-        print("       --dataset=PATH: Specify custom dataset path (implies --use-seed)")
-        print("       --use-threats : Include URLs from threat databases")
-        print("       --kaggle      : Include Kaggle dataset (Phishing_Legitimate_full.csv)")
-        print("       --all         : Include ALL data sources")
-        train_models(use_seed=False, use_threats=False, use_kaggle=False)
+        print("       --use-seed      : Include seed URLs from data/seed_urls.csv")
+        print("       --dataset=PATH  : Specify custom dataset path (implies --use-seed)")
+        print("       --use-threats   : Include URLs from threat databases")
+        print("       --kaggle        : Include Kaggle dataset (Phishing_Legitimate_full.csv)")
+        print("       --use-phishtank : Include PhishTank dataset (data/verified_online.csv)")
+        print("       --all           : Include ALL data sources")
+        train_models(use_seed=False, use_threats=False, use_kaggle=False, use_phishtank=False)

@@ -280,6 +280,16 @@ function displayResults(data) {
         }
     }
 
+    // 7. Detailed LLM Explanation
+    const explanationDiv = document.getElementById('explanation');
+    if (explanationDiv && data.detailed_explanation) {
+        explanationDiv.innerHTML = '<h3 style="margin-bottom: 10px; color: #2c3e50;"><i class="fas fa-robot"></i> Detailed Analysis (AI-powered)</h3>' +
+            data.detailed_explanation.replace(/\n/g, '<br>');
+        explanationDiv.style.display = 'block';
+    } else if (explanationDiv) {
+        explanationDiv.style.display = 'none';
+    }
+
     // Reveal
     document.getElementById('results-section').classList.remove('hidden');
     document.getElementById('results-section').scrollIntoView({ behavior: 'smooth' });
