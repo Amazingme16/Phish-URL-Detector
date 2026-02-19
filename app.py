@@ -19,6 +19,15 @@ try:
 except ImportError:
     lime = None
     print("LIME not available")
+
+try:
+    import tensorflow as tf
+    from tensorflow.keras.models import load_model
+    from tensorflow.keras.preprocessing.sequence import pad_sequences
+    print("[OK] TensorFlow available")
+except ImportError:
+    tf = None
+    print("TensorFlow not available")
 from url_features import URLFeatureExtractor
 from url_dataset_loader import URLDatasetLoader
 from advanced_features import AdvancedURLAnalyzer
@@ -119,6 +128,32 @@ except FileNotFoundError as e:
     shap_explainer = None
     lime_explainer = None
 
+# Load Deep Learning Model
+try:
+    # Check for Keras model
+    if tf and os.path.exists('models/deep_url_model.keras') and os.path.exists('models/dl_tokenizer.pkl'):
+        dl_model = load_model('models/deep_url_model.keras')
+        with open('models/dl_tokenizer.pkl', 'rb') as f:
+            dl_tokenizer = pickle.load(f)
+        print("[OK] Deep Learning model loaded successfully")
+    # Check for H5 model (compatibility)
+    elif tf and os.path.exists('models/deep_url_model.h5') and os.path.exists('models/dl_tokenizer.pkl'):
+        dl_model = load_model('models/deep_url_model.h5')
+        with open('models/dl_tokenizer.pkl', 'rb') as f:
+            dl_tokenizer = pickle.load(f)
+        print("[OK] Deep Learning model (H5) loaded successfully")
+    else:
+        dl_model = None
+        dl_tokenizer = None
+        if not tf:
+            print("DL Model not loaded: TensorFlow missing")
+        else:
+            print("DL Model not loaded: Model files missing (run train_deep_model.py)")
+except Exception as e:
+    print(f"Failed to load Deep Learning model: {e}")
+    dl_model = None
+    dl_tokenizer = None
+
 # Initialize advanced analyzer and link threats detector
 advanced_analyzer = AdvancedURLAnalyzer()
 link_threats_detector = LinkThreatsDetector()
@@ -199,8 +234,27 @@ def analyze_url():
             xgb_pred = xgb_model.predict([features])[0]
             xgb_prob = xgb_model.predict_proba([features])[0][1]
             
-            # Ensemble: Average probability from all three models
-            ensemble_prob = (lr_prob + rf_prob + xgb_prob) / 3
+            # Deep Learning Prediction
+            dl_prob = 0.0
+            dl_status = "inactive"
+            
+            if dl_model and dl_tokenizer:
+                try:
+                    # Tokenize and pad
+                    sequences = dl_tokenizer.texts_to_sequences([url])
+                    X_dl = pad_sequences(sequences, maxlen=150) # Matching training config
+                    # Predict
+                    dl_prob = float(dl_model.predict(X_dl, verbose=0)[0][0])
+                    dl_status = "active"
+                except Exception as e:
+                    print(f"DL prediction error: {e}")
+            
+            # Ensemble: Average probability
+            # If DL is active, include it in the average
+            if dl_status == "active":
+                ensemble_prob = (lr_prob + rf_prob + xgb_prob + dl_prob) / 4
+            else:
+                ensemble_prob = (lr_prob + rf_prob + xgb_prob) / 3
             
             results['models'] = {
                 'logistic_regression': {
@@ -217,6 +271,12 @@ def analyze_url():
                     'prediction': 'PHISHING' if xgb_pred == 1 else 'LEGITIMATE',
                     'probability': float(xgb_prob),
                     'confidence': f"{xgb_prob*100:.1f}%"
+                },
+                'deep_learning': {
+                    'prediction': 'PHISHING' if dl_prob >= 0.5 else 'LEGITIMATE',
+                    'probability': float(dl_prob),
+                    'confidence': f"{dl_prob*100:.1f}%",
+                    'status': dl_status
                 }
             }
             
@@ -413,6 +473,7 @@ Risk level: {results['overall']['risk_level']}
 Warning signs: {', '.join(warning_signs) if warning_signs else 'None detected'}
 Logistic Regression: {lr_prob*100:.1f}% phishing – prediction: {"PHISHING" if lr_pred == 1 else "LEGITIMATE"}
 Random Forest: {rf_prob*100:.1f}% phishing – prediction: {"PHISHING" if rf_pred == 1 else "LEGITIMATE"}
+Deep Learning: {dl_prob*100:.1f}% phishing – prediction: {"PHISHING" if dl_prob >= 0.5 else "LEGITIMATE"} (Status: {dl_status})
                 """)
             ])
 
@@ -436,8 +497,11 @@ def model_info():
         'models_loaded': lr_model is not None and rf_model is not None and xgb_model is not None,
         'features_count': 19,
         'feature_names': feature_extractor.get_feature_names(),
-        'algorithms': ['Logistic Regression', 'Random Forest', 'XGBoost'],
-        'ensemble_enabled': True
+        'features_count': 19,
+        'feature_names': feature_extractor.get_feature_names(),
+        'algorithms': ['Logistic Regression', 'Random Forest', 'XGBoost', 'Deep Learning (Char-CNN/LSTM)'],
+        'ensemble_enabled': True,
+        'deep_learning_active': dl_model is not None
     })
 
 @app.route('/api/seed-dataset', methods=['GET'])

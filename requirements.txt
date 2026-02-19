@@ -19,3 +19,4 @@ python-whois>=0.9.6
 
 langchain
 langchain-ollama
+tensorflow>=2.15.0
