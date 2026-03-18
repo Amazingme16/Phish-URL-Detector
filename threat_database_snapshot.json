@@ -246,6 +246,33 @@
         ],
         "status": "open",
         "first_seen": "2026-01-31T22:04:50.204956Z"
+      },
+      {
+        "url": "https://Https://g00gle.com",
+        "severity": 99,
+        "sources": [
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2026-03-09T13:08:35.742984Z"
+      },
+      {
+        "url": "https://g00gle.com",
+        "severity": 66,
+        "sources": [
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2026-03-09T13:09:12.677723Z"
+      },
+      {
+        "url": "https://Microsot.com",
+        "severity": 66,
+        "sources": [
+          "ml_models"
+        ],
+        "status": "open",
+        "first_seen": "2026-03-09T13:10:04.688284Z"
       }
     ]
   },
