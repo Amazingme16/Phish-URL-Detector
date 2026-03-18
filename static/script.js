@@ -244,11 +244,19 @@ function displayResults(data) {
     }
 
     // Mini Models Display
-    document.getElementById('lr-mini-val').textContent = data.models.logistic_regression.prediction;
-    document.getElementById('rf-mini-val').textContent = data.models.random_forest.prediction;
-
-    if (data.models.xgboost) {
-        document.getElementById('xgb-mini-val').textContent = data.models.xgboost.prediction;
+    if (data.models) {
+        if (data.models.logistic_regression) {
+            document.getElementById('lr-mini-val').textContent = data.models.logistic_regression.prediction;
+        }
+        if (data.models.random_forest) {
+            document.getElementById('rf-mini-val').textContent = data.models.random_forest.prediction;
+        }
+        if (data.models.xgboost) {
+            document.getElementById('xgb-mini-val').textContent = data.models.xgboost.prediction;
+        }
+        if (data.models.deep_learning) {
+            document.getElementById('dl-mini-val').textContent = data.models.deep_learning.prediction;
+        }
     }
 
     if (data.ensemble) {
@@ -267,27 +275,59 @@ function displayResults(data) {
     // 6. Technical Details
     if (data.advanced_analysis) {
         const adv = data.advanced_analysis;
-        document.getElementById('redirects-content').textContent = adv.redirects?.redirects?.length > 0 ? `${adv.redirects.redirects.length} hops` : 'Direct Link';
-        document.getElementById('ssl-content').innerHTML = adv.ssl_certificate?.certificate_valid ? '<span style="color:var(--neon-green)">Encrypted</span>' : '<span style="color:var(--neon-red)">Unencrypted</span>';
-        document.getElementById('whois-content').textContent = adv.whois?.days_old ? `${adv.whois.days_old} days old` : 'Unknown Age';
-
-        if (data.link_threats) {
-            let ltText = `Score: ${data.link_threats.threat_score}/100`;
-            if (data.link_threats.threats_found?.length > 0) {
+        
+        // Redirect Chain
+        if (adv.redirects && adv.redirects.redirects && adv.redirects.redirects.length > 0) {
+            document.getElementById('redirects-content').textContent = `${adv.redirects.redirects.length} hops`;
+        } else {
+            document.getElementById('redirects-content').textContent = 'Direct Link';
+        }
+        
+        // SSL Certificate
+        if (adv.ssl_certificate) {
+            document.getElementById('ssl-content').innerHTML = adv.ssl_certificate.certificate_valid ? 
+                '<span style="color:var(--neon-green)">Encrypted</span>' : 
+                '<span style="color:var(--neon-red)">Unencrypted</span>';
+        } else {
+            document.getElementById('ssl-content').textContent = '---';
+        }
+        
+        // WHOIS Domain Age
+        if (adv.whois && adv.whois.days_old) {
+            document.getElementById('whois-content').textContent = `${adv.whois.days_old} days old`;
+        } else {
+            document.getElementById('whois-content').textContent = 'Unknown Age';
+        }
+    }
+    
+    // Link Threats Detail
+    if (data.link_threats) {
+        let ltText = '';
+        if (typeof data.link_threats.threat_score === 'number') {
+            ltText = `Score: ${data.link_threats.threat_score}/100`;
+            if (data.link_threats.threats_found && data.link_threats.threats_found.length > 0) {
                 ltText += ` (${data.link_threats.threats_found[0]})`;
             }
-            document.getElementById('link-threats-content').textContent = ltText;
         }
+        if (ltText) {
+            document.getElementById('link-threats-content').textContent = ltText;
+        } else {
+            document.getElementById('link-threats-content').textContent = '---';
+        }
+    } else {
+        document.getElementById('link-threats-content').textContent = '---';
     }
 
     // 7. Detailed LLM Explanation
     const explanationDiv = document.getElementById('explanation');
-    if (explanationDiv && data.detailed_explanation) {
-        explanationDiv.innerHTML = '<h3 style="margin-bottom: 10px; color: #2c3e50;"><i class="fas fa-robot"></i> Detailed Analysis (AI-powered)</h3>' +
-            data.detailed_explanation.replace(/\n/g, '<br>');
-        explanationDiv.style.display = 'block';
-    } else if (explanationDiv) {
-        explanationDiv.style.display = 'none';
+    if (explanationDiv) {
+        if (data.detailed_explanation && typeof data.detailed_explanation === 'string' && data.detailed_explanation.trim()) {
+            explanationDiv.innerHTML = '<h3 style="margin-bottom: 10px; color: #2c3e50;"><i class="fas fa-robot"></i> Detailed Analysis (AI-powered)</h3>' +
+                data.detailed_explanation.replace(/\n/g, '<br>');
+            explanationDiv.style.display = 'block';
+        } else {
+            explanationDiv.style.display = 'none';
+        }
     }
 
     // Reveal
@@ -309,25 +349,28 @@ function renderCharts(data) {
     const modelCtx = document.getElementById('model-chart');
     if (modelCtx) {
         const modelData = {
-            labels: ['LR', 'RF', 'XGBoost', 'Ensemble'],
+            labels: ['LR', 'RF', 'XGBoost', 'DL', 'Ensemble'],
             datasets: [{
                 label: 'Confidence (%)',
                 data: [
-                    (data.models.logistic_regression.probability * 100).toFixed(1),
-                    (data.models.random_forest.probability * 100).toFixed(1),
-                    data.models.xgboost ? (data.models.xgboost.probability * 100).toFixed(1) : 0,
+                    data.models && data.models.logistic_regression ? (data.models.logistic_regression.probability * 100).toFixed(1) : 0,
+                    data.models && data.models.random_forest ? (data.models.random_forest.probability * 100).toFixed(1) : 0,
+                    data.models && data.models.xgboost ? (data.models.xgboost.probability * 100).toFixed(1) : 0,
+                    data.models && data.models.deep_learning ? (data.models.deep_learning.probability * 100).toFixed(1) : 0,
                     data.ensemble ? (data.ensemble.probability * 100).toFixed(1) : 0
                 ],
                 backgroundColor: [
                     'rgba(59, 130, 246, 0.7)',
                     'rgba(168, 85, 247, 0.7)',
                     'rgba(236, 72, 153, 0.7)',
+                    'rgba(249, 115, 22, 0.7)',
                     'rgba(34, 197, 94, 0.7)'
                 ],
                 borderColor: [
                     'rgb(59, 130, 246)',
                     'rgb(168, 85, 247)',
                     'rgb(236, 72, 153)',
+                    'rgb(249, 115, 22)',
                     'rgb(34, 197, 94)'
                 ],
                 borderWidth: 2
@@ -376,7 +419,7 @@ function renderCharts(data) {
     const pieCtx = document.getElementById('risk-pie-chart');
     if (pieCtx) {
         // Calculate breakdown based on warning signs and threats
-        let lexicalScore = data.warning_signs ? data.warning_signs.length * 5 : 10;
+        let lexicalScore = (data.warning_signs && Array.isArray(data.warning_signs)) ? data.warning_signs.length * 5 : 10;
         let threatIntelScore = (data.threat_intelligence && data.threat_intelligence.threat_found) ? 30 : 10;
         let advancedScore = data.advanced_analysis ? 20 : 10;
         let mlScore = 40;
@@ -435,7 +478,9 @@ function renderCharts(data) {
 function renderSHAP(data) {
     const container = document.getElementById('shap-container');
 
-    if (!data.shap_analysis || !data.shap_analysis.top_reasons || data.shap_analysis.top_reasons.length === 0) {
+    if (!container) return;
+
+    if (!data.shap_analysis || !data.shap_analysis.top_reasons || !Array.isArray(data.shap_analysis.top_reasons) || data.shap_analysis.top_reasons.length === 0) {
         container.innerHTML = '<div class="placeholder-chart">SHAP analysis not available for this URL</div>';
         return;
     }
@@ -443,22 +488,24 @@ function renderSHAP(data) {
     container.innerHTML = '';
 
     data.shap_analysis.top_reasons.forEach(reason => {
+        if (!reason || typeof reason !== 'object') return;
+        
         const row = document.createElement('div');
         row.className = 'shap-feature-row';
 
-        const featureName = reason.feature.replace(/_/g, ' ').replace(/\w\S*/g, (txt) =>
+        const featureName = (reason.feature || '').replace(/_/g, ' ').replace(/\w\S*/g, (txt) =>
             txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
         );
 
-        const absImpact = Math.abs(reason.impact);
-        const impactPercent = Math.min(absImpact * 100, 100); // Scale for visualization
+        const absImpact = Math.abs(reason.impact || 0);
+        const impactPercent = Math.min(absImpact * 100, 100);
         const impactClass = reason.direction === 'phishing' ? 'positive' : 'negative';
 
         row.innerHTML = `
             <div class="shap-feature-name">${featureName}</div>
             <div class="shap-impact-bar">
                 <div class="shap-impact-fill ${impactClass}" style="width: ${impactPercent}%">
-                    ${reason.impact.toFixed(3)}
+                    ${(reason.impact || 0).toFixed(3)}
                 </div>
             </div>
             <div class="shap-direction ${reason.direction}">
@@ -474,28 +521,14 @@ function renderSHAP(data) {
 
 // ================== LIME Rendering ==================
 function renderLIME(data) {
-    // If we want a separate container, we should create one in index.html
-    // For now, let's append to the SHAP container or create a new section if requested
-    // The user asked to render lime_analysis as a colored list
-
-    // Let's create a dedicated section if it doesn't exist, or reuse SHAP container for now
-    // But better to add a LIME section. Since I can't edit index.html easily without seeing it,
-    // I'll append a LIME header + content to the existing results area or 'shap-container' if suitable.
-    // Actually, I should check if there is a 'lime-container'. 
-    // Assuming I can't modify index.html right now without a task for it, 
-    // I will dynamically insert a LIME section after the SHAP section if needed.
-
-    // But let's look for a container. The user didn't ask to modify index.html.
-    // I will assume there is a place or I will inject it.
-    // Let's inject it into the 'technical-details' or create a new block after SHAP.
-
     let limeContainer = document.getElementById('lime-container');
+    
     if (!limeContainer) {
         // Create it dynamically after shap-container
         const shapContainer = document.getElementById('shap-container');
         if (shapContainer && shapContainer.parentNode) {
             const wrapper = document.createElement('div');
-            wrapper.className = 'analysis-card'; // Reuse style
+            wrapper.className = 'analysis-card';
             wrapper.style.marginTop = '20px';
             wrapper.innerHTML = '<h3><i class="fas fa-search-plus"></i> Local Explanation (LIME)</h3><div id="lime-container" class="shap-container"></div>';
             shapContainer.parentNode.parentNode.insertBefore(wrapper, shapContainer.parentNode.nextSibling);
@@ -503,9 +536,9 @@ function renderLIME(data) {
         }
     }
 
-    if (!limeContainer) return; // Fail safe
+    if (!limeContainer) return;
 
-    if (!data.lime_analysis || !data.lime_analysis.top_contributing_features) {
+    if (!data.lime_analysis || !data.lime_analysis.top_contributing_features || !Array.isArray(data.lime_analysis.top_contributing_features) || data.lime_analysis.top_contributing_features.length === 0) {
         limeContainer.innerHTML = '<div class="placeholder-chart">LIME analysis not available</div>';
         return;
     }
@@ -513,13 +546,15 @@ function renderLIME(data) {
     limeContainer.innerHTML = '';
 
     data.lime_analysis.top_contributing_features.forEach(item => {
+        if (!item || typeof item !== 'object') return;
+        
         const row = document.createElement('div');
-        row.className = 'shap-feature-row'; // Reuse SHAP styling for consistency
+        row.className = 'shap-feature-row';
 
-        const featureName = item.feature;
-        const weight = item.weight;
-        const impactClass = weight > 0 ? 'positive' : 'negative'; // Red if > 0 (Phishing risk), Green if < 0
-        const impactPercent = Math.min(Math.abs(weight) * 300, 100); // Scale up for visibility
+        const featureName = item.feature || '';
+        const weight = item.weight || 0;
+        const impactClass = weight > 0 ? 'positive' : 'negative';
+        const impactPercent = Math.min(Math.abs(weight) * 300, 100);
 
         row.innerHTML = `
             <div class="shap-feature-name" style="font-family: monospace; font-size: 0.9em;">${featureName}</div>
@@ -528,7 +563,7 @@ function renderLIME(data) {
                     ${weight.toFixed(3)}
                 </div>
             </div>
-            <div class="shap-direction ${item.direction}">
+            <div class="shap-direction ${item.direction || 'legitimate'}">
                  ${weight > 0 ? '<i class="fas fa-arrow-up"></i> Risk' : '<i class="fas fa-arrow-down"></i> Safe'}
             </div>
         `;
